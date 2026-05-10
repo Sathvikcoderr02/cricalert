@@ -95,7 +95,17 @@ export async function GET() {
           if (seriesInfo.status === "success" && Array.isArray(matchList)) {
             for (const m of matchList) {
               if (m.matchStarted && !m.matchEnded) {
-                byId.set(m.id, m);
+                const existing = byId.get(m.id);
+                if (!existing) {
+                  byId.set(m.id, m);
+                  continue;
+                }
+                // Prefer richer fields already present from currentMatches
+                // (notably `score`) when series_info omits them.
+                byId.set(m.id, {
+                  ...m,
+                  score: m.score && m.score.length > 0 ? m.score : existing.score,
+                });
               }
             }
           }
