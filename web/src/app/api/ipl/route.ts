@@ -16,12 +16,36 @@ type CricapiEnvelope<T> = {
   info?: unknown;
 };
 
+type SeriesSummary = {
+  id: string;
+  name: string;
+  startDate?: string;
+  endDate?: string;
+};
+
+type SeriesInfoPayload = {
+  matchList?: CurrentMatch[];
+};
+
 type MatchPayload = CurrentMatch & {
   liveScorecard: ParsedScorecard | null;
   scorecardReason: string | null;
   /** Full squad only when live scorecard is unavailable (squad ≠ playing XI). */
   squad: SquadTeam[] | null;
 };
+
+function pickCurrentYearIplSeries(series: SeriesSummary[]): SeriesSummary | null {
+  const year = String(new Date().getUTCFullYear());
+  const filtered = series.filter((s) =>
+    s.name.toLowerCase().includes("indian premier league"),
+  );
+  if (filtered.length === 0) return null;
+  return (
+    filtered.find((s) => s.name.includes(year)) ??
+    filtered[0] ??
+    null
+  );
+}
 
 export async function GET() {
   const apiKey = process.env.CRICAPI_KEY?.trim();
@@ -46,7 +70,42 @@ export async function GET() {
       );
     }
 
-    const ipl = list.data.filter((m) => isIplMatchName(m.name));
+    const byId = new Map<string, CurrentMatch>();
+    for (const m of list.data.filter((x) => isIplMatchName(x.name))) {
+      byId.set(m.id, m);
+    }
+
+    // CricAPI occasionally omits IPL fixtures from `currentMatches`.
+    // Fallback to the IPL series match list and include any live games.
+    try {
+      const seriesRes = await fetchCricapi<CricapiEnvelope<SeriesSummary[]>>(
+        "series",
+        apiKey,
+        { offset: "0", search: "indian premier league" },
+      );
+      if (seriesRes.status === "success" && Array.isArray(seriesRes.data)) {
+        const currentIpl = pickCurrentYearIplSeries(seriesRes.data);
+        if (currentIpl?.id) {
+          const seriesInfo = await fetchCricapi<CricapiEnvelope<SeriesInfoPayload>>(
+            "series_info",
+            apiKey,
+            { id: currentIpl.id },
+          );
+          const matchList = seriesInfo.data?.matchList;
+          if (seriesInfo.status === "success" && Array.isArray(matchList)) {
+            for (const m of matchList) {
+              if (m.matchStarted && !m.matchEnded) {
+                byId.set(m.id, m);
+              }
+            }
+          }
+        }
+      }
+    } catch {
+      // Keep using `currentMatches` only when fallback lookup fails.
+    }
+
+    const ipl = [...byId.values()];
 
     const matches: MatchPayload[] = await Promise.all(
       ipl.map(async (m) => {
