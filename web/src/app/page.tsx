@@ -47,6 +47,25 @@ function formatCountdown(totalSeconds: number): string {
   return `${m}m ${sec.toString().padStart(2, "0")}s`;
 }
 
+function scoreFallbackFromLiveScorecard(
+  liveScorecard: ParsedScorecard | null,
+): CurrentMatch["score"] {
+  if (!liveScorecard) return [];
+  return liveScorecard.innings.map((inn) => {
+    const runs = inn.batting.reduce((sum, row) => sum + row.r, 0);
+    const wickets = inn.batting.reduce(
+      (sum, row) => sum + (row.dismissal.trim() ? 1 : 0),
+      0,
+    );
+    return {
+      r: runs,
+      w: wickets,
+      o: 0,
+      inning: inn.label,
+    };
+  });
+}
+
 function MatchStatusPill({
   ended,
   started,
@@ -273,7 +292,12 @@ export default function Home() {
           ) : null}
 
           <ul className="mt-2 flex flex-col gap-8">
-            {data?.matches.map((m) => (
+            {data?.matches.map((m) => {
+              const inningsScore =
+                m.score && m.score.length > 0
+                  ? m.score
+                  : scoreFallbackFromLiveScorecard(m.liveScorecard);
+              return (
               <li key={m.id}>
                 <article className="overflow-hidden rounded-2xl border border-white/12 bg-gradient-to-b from-slate-900/70 to-slate-950/80 shadow-2xl shadow-black/50 ring-1 ring-white/[0.04] backdrop-blur-md">
                   <div className="relative border-b border-white/10 px-5 py-5 sm:px-6">
@@ -293,9 +317,9 @@ export default function Home() {
                     </p>
                   </div>
 
-                  {m.score && m.score.length > 0 ? (
+                  {inningsScore && inningsScore.length > 0 ? (
                     <div className="grid gap-3 border-b border-white/10 px-5 py-5 sm:grid-cols-2 sm:px-6">
-                      {m.score.map((inn, i) => (
+                      {inningsScore.map((inn, i) => (
                         <div
                           key={`${m.id}-inn-${i}`}
                           className="relative overflow-hidden rounded-xl border border-white/10 bg-slate-950/60 px-4 py-4 shadow-inner shadow-black/30"
@@ -308,9 +332,11 @@ export default function Home() {
                             {inn.r}
                             <span className="text-slate-500">/</span>
                             {inn.w}
-                            <span className="ml-2 text-base font-semibold text-slate-400">
-                              ({formatOvers(inn.o)} ov)
-                            </span>
+                            {inn.o > 0 ? (
+                              <span className="ml-2 text-base font-semibold text-slate-400">
+                                ({formatOvers(inn.o)} ov)
+                              </span>
+                            ) : null}
                           </p>
                         </div>
                       ))}
@@ -389,7 +415,8 @@ export default function Home() {
                   </div>
                 </article>
               </li>
-            ))}
+              );
+            })}
           </ul>
 
           <p className="mt-14 text-center text-[10px] text-slate-500/90">
