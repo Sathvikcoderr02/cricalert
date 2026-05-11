@@ -12,7 +12,10 @@ import {
 } from "@/lib/alertPreferences";
 import { diffMatchScoreSnapshots } from "@/lib/detectScoreAlerts";
 import type { CurrentMatch, SquadTeam } from "@/lib/cricapi";
-import { buildMatchScoreSnapshot } from "@/lib/matchSnapshot";
+import {
+  buildMatchScoreSnapshot,
+  scoreFallbackFromLiveScorecard,
+} from "@/lib/matchSnapshot";
 import type { ParsedScorecard } from "@/lib/matchScorecard";
 import { playAlertSound } from "@/lib/playAlertSound";
 
@@ -45,25 +48,6 @@ function formatCountdown(totalSeconds: number): string {
   const m = Math.floor(s / 60);
   const sec = s % 60;
   return `${m}m ${sec.toString().padStart(2, "0")}s`;
-}
-
-function scoreFallbackFromLiveScorecard(
-  liveScorecard: ParsedScorecard | null,
-): CurrentMatch["score"] {
-  if (!liveScorecard) return [];
-  return liveScorecard.innings.map((inn) => {
-    const runs = inn.batting.reduce((sum, row) => sum + row.r, 0);
-    const wickets = inn.batting.reduce(
-      (sum, row) => sum + (row.dismissal.trim() ? 1 : 0),
-      0,
-    );
-    return {
-      r: runs,
-      w: wickets,
-      o: 0,
-      inning: inn.label,
-    };
-  });
 }
 
 function MatchStatusPill({

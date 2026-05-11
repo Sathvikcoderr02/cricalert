@@ -1,5 +1,8 @@
 import type { SoundPresetId } from "@/lib/alertPreferences";
 
+/** Served from `public/ipl_sms.mp3`. */
+const IPL_SMS_SRC = "/ipl_sms.mp3";
+
 let sharedCtx: AudioContext | null = null;
 
 function getCtx(): AudioContext | null {
@@ -42,9 +45,18 @@ function beep(
 }
 
 /**
- * Plays a short preset tone. Safe to call repeatedly; drops if AudioContext unavailable.
+ * Plays a short preset tone or the IPL SMS ringtone (MP3).
+ * Safe to call repeatedly; HTMLAudio uses a new instance so overlapping alerts can play.
  */
 export function playAlertSound(preset: SoundPresetId): void {
+  if (preset === "ipl_sms") {
+    if (typeof window === "undefined") return;
+    const audio = new Audio(IPL_SMS_SRC);
+    audio.volume = 0.92;
+    void audio.play().catch(() => {});
+    return;
+  }
+
   const ctx = getCtx();
   if (!ctx) return;
   const t0 = ctx.currentTime;

@@ -54,8 +54,9 @@ export function AlertSettingsPanel({
             Sounds when scores change on refresh
           </p>
           <p className="mt-0.5 text-xs text-slate-500">
-            Choose events and a tone each. Works while this tab is open (5-minute
-            refresh). Tap test to unlock audio in strict browsers.
+            Alerts compare each refresh to the last one (default 5 minutes, or
+            Refresh now). Team totals use the scorecard when the API omits live
+            scores. Tap Play once if the browser blocks audio until a gesture.
           </p>
         </div>
         <span className="shrink-0 text-slate-400">{open ? "▲" : "▼"}</span>

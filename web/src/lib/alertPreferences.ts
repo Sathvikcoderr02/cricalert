@@ -1,6 +1,6 @@
 /** User-selectable alert kinds and sound presets (stored in localStorage). */
 
-export const SOUND_PRESETS = ["chime", "bell", "buzz", "pop"] as const;
+export const SOUND_PRESETS = ["ipl_sms", "chime", "bell", "buzz", "pop"] as const;
 export type SoundPresetId = (typeof SOUND_PRESETS)[number];
 
 export const ALERT_KINDS = [
@@ -27,7 +27,8 @@ export type AlertPreferences = {
   rules: Record<AlertKind, AlertRule>;
 };
 
-const STORAGE_KEY = "crikalert.alertPrefs.v1";
+const STORAGE_KEY = "crikalert.alertPrefs.v2";
+const LEGACY_STORAGE_KEY = "crikalert.alertPrefs.v1";
 
 export const ALERT_LABELS: Record<AlertKind, string> = {
   team_50: "Team reaches 50 runs (inning)",
@@ -39,8 +40,8 @@ export const ALERT_LABELS: Record<AlertKind, string> = {
   batter_100: "Batter reaches 100 runs",
 };
 
-function defaultRule(sound: SoundPresetId): AlertRule {
-  return { enabled: false, sound };
+function rule(enabled: boolean, sound: SoundPresetId): AlertRule {
+  return { enabled, sound };
 }
 
 export function defaultAlertPreferences(): AlertPreferences {
@@ -48,13 +49,13 @@ export function defaultAlertPreferences(): AlertPreferences {
     soundsEnabled: true,
     liveOnly: true,
     rules: {
-      team_50: defaultRule("chime"),
-      team_100: defaultRule("bell"),
-      team_150: defaultRule("chime"),
-      team_200: defaultRule("bell"),
-      wicket: defaultRule("buzz"),
-      batter_50: defaultRule("pop"),
-      batter_100: defaultRule("chime"),
+      team_50: rule(true, "ipl_sms"),
+      team_100: rule(true, "ipl_sms"),
+      team_150: rule(true, "ipl_sms"),
+      team_200: rule(true, "ipl_sms"),
+      wicket: rule(true, "ipl_sms"),
+      batter_50: rule(true, "ipl_sms"),
+      batter_100: rule(true, "ipl_sms"),
     },
   };
 }
@@ -74,29 +75,44 @@ function parseRule(raw: unknown, fallback: AlertRule): AlertRule {
   };
 }
 
+function parseStoredPrefs(
+  j: Record<string, unknown>,
+  base: AlertPreferences,
+): AlertPreferences {
+  const rules = { ...base.rules };
+  for (const k of ALERT_KINDS) {
+    const key = `rule_${k}`;
+    if (j[key] != null) {
+      rules[k] = parseRule(j[key], base.rules[k]);
+    }
+  }
+  return {
+    soundsEnabled:
+      typeof j.soundsEnabled === "boolean" ? j.soundsEnabled : base.soundsEnabled,
+    liveOnly: typeof j.liveOnly === "boolean" ? j.liveOnly : base.liveOnly,
+    rules,
+  };
+}
+
 export function loadAlertPreferences(): AlertPreferences {
   const base = defaultAlertPreferences();
   if (typeof window === "undefined") return base;
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return base;
-    const j = JSON.parse(raw) as Record<string, unknown>;
-    const rules = { ...base.rules };
-    for (const k of ALERT_KINDS) {
-      const key = `rule_${k}`;
-      if (j[key] != null) {
-        rules[k] = parseRule(j[key], base.rules[k]);
-      }
+    const rawV2 = localStorage.getItem(STORAGE_KEY);
+    if (rawV2) {
+      return parseStoredPrefs(JSON.parse(rawV2) as Record<string, unknown>, base);
     }
-    return {
-      soundsEnabled:
-        typeof j.soundsEnabled === "boolean" ? j.soundsEnabled : base.soundsEnabled,
-      liveOnly: typeof j.liveOnly === "boolean" ? j.liveOnly : base.liveOnly,
-      rules,
-    };
+    const rawV1 = localStorage.getItem(LEGACY_STORAGE_KEY);
+    if (rawV1) {
+      const prefs = parseStoredPrefs(JSON.parse(rawV1) as Record<string, unknown>, base);
+      saveAlertPreferences(prefs);
+      localStorage.removeItem(LEGACY_STORAGE_KEY);
+      return prefs;
+    }
   } catch {
     return base;
   }
+  return base;
 }
 
 export function saveAlertPreferences(p: AlertPreferences): void {

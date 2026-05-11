@@ -1,5 +1,25 @@
 import type { ParsedScorecard } from "@/lib/matchScorecard";
 
+/** Same totals as the score strip when CricAPI omits `match.score`. */
+export function scoreFallbackFromLiveScorecard(
+  liveScorecard: ParsedScorecard | null,
+): { r: number; w: number; o: number; inning: string }[] {
+  if (!liveScorecard) return [];
+  return liveScorecard.innings.map((inn) => {
+    const runs = inn.batting.reduce((sum, row) => sum + row.r, 0);
+    const wickets = inn.batting.reduce(
+      (sum, row) => sum + (row.dismissal.trim() ? 1 : 0),
+      0,
+    );
+    return {
+      r: runs,
+      w: wickets,
+      o: 0,
+      inning: inn.label,
+    };
+  });
+}
+
 /** Compact state for diffing score alerts between polls. */
 export type MatchScoreSnapshot = {
   matchId: string;
@@ -22,7 +42,12 @@ export function buildMatchScoreSnapshot(m: {
   score?: { r: number; w: number }[];
   liveScorecard: ParsedScorecard | null;
 }): MatchScoreSnapshot {
-  const score = (m.score ?? []).map((s) => ({ r: s.r, w: s.w }));
+  const fromApi = (m.score ?? []).map((s) => ({ r: s.r, w: s.w }));
+  const fromCard = scoreFallbackFromLiveScorecard(m.liveScorecard).map(({ r, w }) => ({
+    r,
+    w,
+  }));
+  const score = fromApi.length > 0 ? fromApi : fromCard;
   const innings = m.liveScorecard?.innings ?? [];
   const battersByInn = innings.map((inn) => {
     const rec: Record<string, { r: number; dismissed: boolean }> = {};
